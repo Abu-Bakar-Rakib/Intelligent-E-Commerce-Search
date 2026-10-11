@@ -118,6 +118,73 @@ st.markdown("""
         font-weight: 800 !important;
     }
     
+    /* Voice Visualizer Card */
+    .voice-visualizer {
+        background: linear-gradient(135deg, #eef2ff 0%, #faf5ff 100%);
+        border: 1.5px solid #818cf8;
+        border-radius: 14px;
+        padding: 12px 20px;
+        margin-top: 12px;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 4px 15px rgba(99, 102, 241, 0.1);
+        animation: voiceFadeIn 0.3s ease-out;
+    }
+    .voice-visualizer-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+    .mic-icon-pulse {
+        font-size: 1.6rem;
+        display: inline-block;
+        animation: voicePulse 1.4s infinite ease-in-out;
+    }
+    .voice-label {
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #6366f1;
+        font-weight: 700;
+        margin-bottom: 2px;
+    }
+    .voice-text {
+        font-size: 1.15rem;
+        color: #0f172a;
+        font-weight: 700;
+        font-style: italic;
+    }
+    .voice-status-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: #e0e7ff;
+        color: #3730a3;
+        font-size: 0.78rem;
+        font-weight: 700;
+        padding: 6px 12px;
+        border-radius: 20px;
+    }
+    .live-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: #10b981;
+        display: inline-block;
+        box-shadow: 0 0 8px #10b981;
+    }
+    @keyframes voicePulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.2); }
+        100% { transform: scale(1); }
+    }
+    @keyframes voiceFadeIn {
+        from { opacity: 0; transform: translateY(-6px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
     /* Headers */
     h3 {
         font-weight: 700 !important;
@@ -160,6 +227,12 @@ if "last_results" not in st.session_state:
     st.session_state.last_results = None
 if "search_count" not in st.session_state:
     st.session_state.search_count = 0
+if "search_bar_query" not in st.session_state:
+    st.session_state["search_bar_query"] = ""
+if "last_voice_query" not in st.session_state:
+    st.session_state["last_voice_query"] = None
+if "voice_transcript" not in st.session_state:
+    st.session_state["voice_transcript"] = None
 
 # ===== HEADER =====
 st.title("🛍️ Intelligent E-Commerce Search")
@@ -223,12 +296,7 @@ with st.sidebar:
 
 # ===== MAIN SEARCH =====
 col_search, col_mic = st.columns([10, 1], gap="small")
-with col_search:
-    text_query = st.text_input(
-        "🔍 Search for products",
-        placeholder="e.g., blue nike shoes under 5000 taka, casual shirt under 1000 taka...",
-        label_visibility="collapsed"
-    )
+
 with col_mic:
     voice_query = speech_to_text(
         start_prompt="🎤",
@@ -239,8 +307,46 @@ with col_mic:
         key='STT'
     )
 
-# Use voice query if recorded, otherwise text query
-query = voice_query if voice_query else text_query
+# Sync voice input into search bar & trigger immediate visual update
+if voice_query and voice_query.strip() and voice_query != st.session_state.get("last_voice_query"):
+    st.session_state["last_voice_query"] = voice_query
+    st.session_state["search_bar_query"] = voice_query
+    st.session_state["voice_transcript"] = voice_query
+    st.rerun()
+
+with col_search:
+    text_query = st.text_input(
+        "🔍 Search for products",
+        value=st.session_state.get("search_bar_query", ""),
+        placeholder="e.g., blue nike shoes under 5000 taka, casual shirt under 1000 taka...",
+        label_visibility="collapsed"
+    )
+
+# Sync manual text input back to session state
+if text_query != st.session_state.get("search_bar_query", ""):
+    st.session_state["search_bar_query"] = text_query
+    # Hide voice badge if the user manually changes the text
+    if st.session_state.get("voice_transcript") and text_query != st.session_state.get("voice_transcript"):
+        st.session_state["voice_transcript"] = None
+
+# Visual Speech Recognition Banner directly below the search bar
+if st.session_state.get("voice_transcript") and st.session_state.get("search_bar_query"):
+    st.markdown(f"""
+    <div class="voice-visualizer">
+        <div class="voice-visualizer-left">
+            <span class="mic-icon-pulse">🎙️</span>
+            <div>
+                <div class="voice-label">Voice Recognized ({st.session_state.get('voice_lang_code', 'en-US')})</div>
+                <div class="voice-text">"{st.session_state['voice_transcript']}"</div>
+            </div>
+        </div>
+        <div class="voice-status-badge">
+            <span class="live-dot"></span> Visually populated in search bar
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+query = text_query
 
 # ===== EXECUTE SEARCH =====
 import time
