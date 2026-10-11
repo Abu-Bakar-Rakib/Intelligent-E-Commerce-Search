@@ -147,7 +147,7 @@ def render_product_card(row):
             </div>
         </div>
         <div class="product-price">
-            <h3>₹{row['price']:,}</h3>
+            <h3>৳{row['price']:,}</h3>
         </div>
     </div>
     '''
@@ -219,14 +219,14 @@ with st.sidebar:
     st.markdown("### 🎛️ Filter Results")
     all_categories = sorted(list(set(p[1] for p in RAW_PRODUCTS)))
     category_filter = st.selectbox("Category", ["All"] + all_categories)
-    price_filter = st.slider("Max Price (₹)", 0, 150000, 150000, step=500)
+    price_filter = st.slider("Max Price (৳)", 0, 150000, 150000, step=500)
 
 # ===== MAIN SEARCH =====
 col_search, col_mic = st.columns([10, 1], gap="small")
 with col_search:
     text_query = st.text_input(
         "🔍 Search for products",
-        placeholder="e.g., blue nike shoes under 5000, comfortable t-shirt for summer...",
+        placeholder="e.g., blue nike shoes under 5000 taka, casual shirt under 1000 taka...",
         label_visibility="collapsed"
     )
 with col_mic:
@@ -313,7 +313,7 @@ if st.session_state.last_results:
             use_container_width=True,
             hide_index=True,
             column_config={
-                "price": st.column_config.NumberColumn("Price", format="₹%d")
+                "price": st.column_config.NumberColumn("Price (৳)", format="৳%d")
             }
         )
         

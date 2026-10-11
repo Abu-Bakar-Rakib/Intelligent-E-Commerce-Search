@@ -12,7 +12,8 @@ from config import (
 from utils import (
     _toks, _key, _alnum, _word_in, _cat, _minmax, extract_price,
     strip_price_phrase, strip_size_phrase, _find_size, _find_gender,
-    parse_json, _alias_pass, build_bm25_index, bm25_scores, GENDER_CUES
+    parse_json, _alias_pass, build_bm25_index, bm25_scores, GENDER_CUES,
+    strip_conversational_phrases
 )
 
 # Cache for parsed intents, prepared data, cross-encoder scores, and searches
@@ -191,9 +192,10 @@ class SearchEngine:
         return intent
     
     def retrieval_query(self, q):
-        """Clean query for retrieval: no price, no size"""
+        """Clean query for retrieval: no price, no size, no conversational fillers"""
         a = strip_price_phrase(q) or q
-        return strip_size_phrase(a) or a
+        a = strip_size_phrase(a) or a
+        return strip_conversational_phrases(a) or a
     
     def prepare_retrieval(self, query, intent):
         """Prepare BM25 & cosine scores with RRF-based hybrid fusion"""
@@ -367,6 +369,11 @@ class SearchEngine:
         # Combined selection score
         sel = rrf_boosted + grp_bonus + bonus
         
+        # Hard constraint filtering (price, gender, size)
+        mask = prep.get("mask")
+        if mask is not None and mask.any():
+            sel[~mask] = -9999.0
+        
         # Select candidates: pool size scales with k
         pool_size = max(G_POOL, k)
         cand = [int(i) for i in np.argsort(-sel)[:pool_size]]
@@ -424,6 +431,12 @@ class SearchEngine:
         df["matched"] = ["+".join(n for n, f in flags.items() if f[i]) for i in top]
         
         note = ""
+        if intent.get("max_price") is not None and intent.get("min_price") is not None:
+            note += f"Price: ৳{intent['min_price']} - ৳{intent['max_price']} | "
+        elif intent.get("max_price") is not None:
+            note += f"Price: <= ৳{intent['max_price']} | "
+        elif intent.get("min_price") is not None:
+            note += f"Price: >= ৳{intent['min_price']} | "
         if intent.get("size"):
             note += f"Size: {intent['size']} | "
         if grp_names:

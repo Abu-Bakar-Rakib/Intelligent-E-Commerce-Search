@@ -612,5 +612,13 @@ RAW_PRODUCTS = [
  ("Mehendi cone", "makeup", "Nupur", "brown", "paste", "women", "", 80, "Ready-to-use henna cone for Eid and wedding designs."),
  ("Perfume 50ml", "fragrance", "Zara", "clear", "liquid", "unisex", "", 2800, "Zara Wonder Rose EDP 50ml — floral and fresh."),
  ("Oud Attar 10ml", "fragrance", "Al Haramain", "brown", "liquid", "unisex", "", 1500, "Pure Arabian oud attar — long-lasting and intense."),
- ("Electric shaver", "grooming", "Philips", "silver", "electric", "men", "", 5500, "Philips Series 3000 cordless electric shaver.")
+ ("Electric shaver", "grooming", "Philips", "silver", "electric", "men", "", 5500, "Philips Series 3000 cordless electric shaver."),
+
+ # --- Value Shirts under 1000 Taka ---
+ ("Casual Cotton Oxford Shirt", "shirt", "Cats Eye", "blue", "cotton", "men", "M,L,XL", 850, "Comfortable pure cotton button-down casual shirt under 1000 taka."),
+ ("Men Slim Fit Formal Shirt", "shirt", "Ecstasy", "white", "cotton", "men", "M,L,XL", 950, "Clean slim-fit white cotton formal shirt for office and events."),
+ ("Printed Summer Casual Shirt", "shirt", "Sailor", "navy", "rayon", "men", "S,M,L,XL", 780, "Lightweight breathable short sleeve printed casual beach shirt."),
+ ("Classic Check Casual Shirt", "shirt", "Gentle Park", "maroon", "cotton", "men", "M,L,XL", 890, "Premium check pattern cotton shirt for smart casual occasions."),
+ ("Women Relaxed Linen Shirt", "shirt", "Aarong", "beige", "linen", "women", "S,M,L", 920, "Soft breathable linen-cotton blend casual shirt for women."),
+ ("Solid Color Pique Polo Shirt", "shirt", "Richman", "black", "cotton", "men", "M,L,XL", 750, "Classic polo collar pique cotton shirt for casual outings.")
 ]

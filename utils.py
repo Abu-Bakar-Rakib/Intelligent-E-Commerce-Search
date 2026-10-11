@@ -5,7 +5,7 @@ from collections import Counter
 from difflib import get_close_matches
 
 # ===== TEXT UTILITIES =====
-_STOP = set("a an the for of and or in on with to is it my me i that who this at by from under over below above".split())
+_STOP = set("a an the for of and or in on with to is it my me i that who this at by from under over below above give show find get want need please can you".split())
 
 def _toks(s):
     s = s.lower().replace("h&m", "hm")
@@ -29,11 +29,38 @@ def _minmax(x):
     lo, hi = x.min(), x.max()
     return (x - lo) / (hi - lo) if hi > lo else np.zeros_like(x)
 
+# ===== CONVERSATIONAL PHRASE CLEANING =====
+CONVERSATIONAL_PHRASES = [
+    r"\bgive\s+me\s+(?:a\s+|an\s+)?",
+    r"\bshow\s+me\s+(?:a\s+|an\s+)?",
+    r"\bfind\s+me\s+(?:a\s+|an\s+)?",
+    r"\bget\s+me\s+(?:a\s+|an\s+)?",
+    r"\bi\s+(?:want|need|am\s+looking\s+for)\s+(?:a\s+|an\s+)?",
+    r"\bcan\s+you\s+(?:give|show|find|get)\s+(?:me\s+)?(?:a\s+|an\s+)?",
+    r"\bamake\s+(?:dao|dekhao)\s*",
+    r"\bamake\b\s*",
+    r"\bdekhao\s*",
+    r"\bkhujchi\s*",
+    r"\bdorkar\s*",
+    r"\bchai\s*",
+    r"\blagbe\s*",
+    r"\bplease\s*",
+]
+
+def strip_conversational_phrases(query):
+    """Strip conversational filler like 'give me a', 'show me', 'amake dekhao'."""
+    q = query
+    for pat in CONVERSATIONAL_PHRASES:
+        q = re.sub(pat, " ", q, flags=re.I)
+    return re.sub(r"\s+", " ", q).strip()
+
 # ===== PRICE EXTRACTION =====
 _NUM = r"(?:[$₹৳£€]\s*)?(\d+(?:\.\d+)?)\s*(k)?"
-_CUR = r"(?:\s*(?:usd|dollars?|taka|tk|bdt|rs|inr|rupees?|eur|euros?|gbp|pounds?))?"
+_CUR = r"(?:\s*(?:taka|tk|bdt|takar?|৳|rs|inr|rupees?|usd|dollars?|eur|euros?|gbp|pounds?))?"
 _LOW = r"(?:under|below|less than|upto|up to|within|maximum|max|cheaper than|not more than|<)"
 _HIGH = r"(?:over|above|more than|at least|minimum|min|starting from|>)"
+_LOW_POST = r"(?:takar\s+moddhe|taka\s+er\s+niche|taka\s+er\s+kom|tk\s+er\s+niche|tk\s+er\s+kom|takar\s+kom|moddhe|niche|kom)"
+_HIGH_POST = r"(?:takar\s+beshi|taka\s+er\s+upore|takar\s+upore|beshi|upore)"
 
 def _val(num, k):
     v = float(num) * (1000 if k else 1)
@@ -41,21 +68,44 @@ def _val(num, k):
 
 def extract_price(query):
     q = query.lower().replace(",", "")
+    
+    # 1. Price Range: between X and Y
     m = re.search(rf"(?:between|from)\s+{_NUM}{_CUR}\s*(?:and|to|-)\s*{_NUM}{_CUR}", q)
     if m:
         a, b = _val(m.group(1), m.group(2)), _val(m.group(3), m.group(4))
         return min(a, b), max(a, b)
-    m = re.search(rf"{_LOW}\s*{_NUM}", q)
+    
+    # 2. Prefix max price: under 1000 taka / below 1000 / under tk 1000
+    m = re.search(rf"{_LOW}\s*(?:taka|tk|bdt|৳)?\s*{_NUM}{_CUR}", q)
     if m:
         return None, _val(m.group(1), m.group(2))
-    m = re.search(rf"{_HIGH}\s*{_NUM}", q)
+    
+    # 3. Postfix max price: 1000 takar moddhe / 1000 tk er niche
+    m = re.search(rf"{_NUM}{_CUR}\s*(?:er\s+)?{_LOW_POST}", q)
+    if m:
+        return None, _val(m.group(1), m.group(2))
+    
+    # 4. Prefix min price: over 1000 taka / above 1000
+    m = re.search(rf"{_HIGH}\s*(?:taka|tk|bdt|৳)?\s*{_NUM}{_CUR}", q)
     if m:
         return _val(m.group(1), m.group(2)), None
+        
+    # 5. Postfix min price: 1000 takar beshi
+    m = re.search(rf"{_NUM}{_CUR}\s*(?:er\s+)?{_HIGH_POST}", q)
+    if m:
+        return _val(m.group(1), m.group(2)), None
+        
     return None, None
 
 def strip_price_phrase(query):
-    q = re.sub(rf"(?:between|from)\s+{_NUM}{_CUR}\s*(?:and|to|-)\s*{_NUM}{_CUR}", " ", query, flags=re.I)
-    q = re.sub(rf"(?:{_LOW}|{_HIGH})\s*{_NUM}{_CUR}", " ", q, flags=re.I)
+    q = query.lower().replace(",", "")
+    q = re.sub(rf"(?:between|from)\s+{_NUM}{_CUR}\s*(?:and|to|-)\s*{_NUM}{_CUR}", " ", q, flags=re.I)
+    q = re.sub(rf"{_LOW}\s*(?:taka|tk|bdt|৳)?\s*{_NUM}{_CUR}", " ", q, flags=re.I)
+    q = re.sub(rf"{_NUM}{_CUR}\s*(?:er\s+)?{_LOW_POST}", " ", q, flags=re.I)
+    q = re.sub(rf"{_HIGH}\s*(?:taka|tk|bdt|৳)?\s*{_NUM}{_CUR}", " ", q, flags=re.I)
+    q = re.sub(rf"{_NUM}{_CUR}\s*(?:er\s+)?{_HIGH_POST}", " ", q, flags=re.I)
+    # Also strip stray currency mentions
+    q = re.sub(r"\b(?:taka|tk|bdt|৳)\b", " ", q, flags=re.I)
     return re.sub(r"\s+", " ", q).strip()
 
 # ===== SIZE HANDLING =====
