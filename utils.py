@@ -29,6 +29,29 @@ def _minmax(x):
     lo, hi = x.min(), x.max()
     return (x - lo) / (hi - lo) if hi > lo else np.zeros_like(x)
 
+# ===== MATERIAL EQUIVALENCE & MATCHING =====
+MATERIAL_SYNONYMS = {
+    "metal": {"metal", "steel", "aluminium", "aluminum", "iron", "brass", "metallic"},
+    "steel": {"steel", "metal", "stainless steel", "iron"},
+    "aluminum": {"aluminum", "aluminium", "metal"},
+    "aluminium": {"aluminium", "aluminum", "metal"},
+    "leather": {"leather", "genuine leather", "faux leather", "synthetic leather"},
+    "cotton": {"cotton", "cotton blend", "tant cotton"},
+    "silk": {"silk", "half silk", "katan silk", "silk blend"},
+    "plastic": {"plastic", "pvc", "silicone", "resin", "polycarbonate"},
+}
+
+def is_material_match(query_mat, doc_mat):
+    qm = _alnum(query_mat)
+    dm = _alnum(doc_mat)
+    if not qm or not dm:
+        return False
+    if qm in dm or dm in qm:
+        return True
+    equiv = MATERIAL_SYNONYMS.get(qm, set())
+    return any(e in dm or dm in e for e in equiv)
+
+
 # ===== CONVERSATIONAL PHRASE CLEANING =====
 CONVERSATIONAL_PHRASES = [
     r"\bgive\s+me\s+(?:a\s+|an\s+)?",
@@ -190,10 +213,17 @@ ALIASES = {
     "shobuj": "green", "sabuj": "green", "sobuj": "green", "holud": "yellow", "golapi": "pink",
     "chele": "boys", "cheler": "boys", "meye": "girls", "meyer": "girls", "meyeder": "girls",
     "dam": "", "daam": "",
+    "botol": "bottle", "botal": "bottle",
 }
 
-PHRASES = [("t shirt", "t-shirt"), ("mobile cover", "phone case"), ("phone cover", "phone case"),
-           ("mobile case", "phone case")]
+PHRASES = [
+    ("t shirt", "t-shirt"),
+    ("mobile cover", "phone case"),
+    ("phone cover", "phone case"),
+    ("mobile case", "phone case"),
+    ("panir botol", "water bottle"),
+    ("pani botol", "water bottle"),
+]
 
 # ===== FUZZY SPELL CORRECTION =====
 # Comprehensive vocabulary built from the entire product catalog

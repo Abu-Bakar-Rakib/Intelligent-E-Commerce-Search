@@ -18,13 +18,13 @@ PARSER_MODE = "rules+llm"
 CE_FP16 = True          # half-precision reranker on GPU
 
 # ===== FILTER SETTINGS =====
-BOOST = {"category": 0.15, "brand": 0.20, "color": 0.10, "material": 0.10}
+BOOST = {"category": 0.35, "brand": 0.20, "color": 0.10, "material": 0.15}
 MIN_RESULTS = 3
 RELAX_ORDER = ["size", "gender", "price"]
 ALLOW_FALLBACK = True
 
 # ===== ATTRIBUTE WEIGHTS =====
-ATTR_W = {"color": 0.6, "brand": 0.6, "material": 0.4, "category": 0.3}
+ATTR_W = {"color": 0.6, "brand": 0.6, "material": 0.5, "category": 1.5}
 
 # ===== UI SETTINGS =====
 PAGE_TITLE = "🛍️ E-Commerce Intelligent Search"

@@ -13,7 +13,7 @@ from utils import (
     _toks, _key, _alnum, _word_in, _cat, _minmax, extract_price,
     strip_price_phrase, strip_size_phrase, _find_size, _find_gender,
     parse_json, _alias_pass, build_bm25_index, bm25_scores, GENDER_CUES,
-    strip_conversational_phrases, is_father_gift_query
+    strip_conversational_phrases, is_father_gift_query, is_material_match
 )
 
 MATURE_MEN_CATEGORIES = {
@@ -120,6 +120,17 @@ class SearchEngine:
             "outerwear": ({"jacket", "jackets", "raincoat", "poncho", "coat"}, ["jacket", "raincoat"]),
             "audio": ({"headphone", "headphones", "earbuds", "earphone", "earphones", "speaker", "speakers"},
                      ["headphones", "earbuds", "speaker"]),
+            "bottles": (
+                {"bottle", "bottles", "flask", "flasks", "mug", "mugs", "thermos", "waterbottle", "water-bottle"},
+                ["water bottle", "travel mug", "thermos", "mug"]
+            ),
+            "wallets": ({"wallet", "wallets", "purse", "clutch", "cardholder"}, ["wallet"]),
+            "phone_acc": ({"case", "cover", "protector"}, ["phone case", "screen protector"]),
+            "appliances": (
+                {"blender", "kettle", "toaster", "iron", "oven", "cooker", "fryer", "appliance"},
+                ["blender", "kettle", "air fryer", "rice cooker", "coffee maker", "microwave oven", "toaster", "appliance"]
+            ),
+            "toys": ({"toy", "toys", "puzzle", "puzzles", "lego", "blocks"}, ["toy", "board game"]),
         }
         
         self.group_masks = {}
@@ -282,7 +293,7 @@ class SearchEngine:
         
         # When looking for gifts for father/mature adult men, strictly exclude juvenile/kids items
         if intent.get("is_father_gift"):
-            juvenile = self.catalog["text"].str.contains(r"\b(kid|kids|baby|child|children|school shoes|toys?)\b", case=False, regex=True).to_numpy()
+            juvenile = self.catalog["text"].str.contains(r"\b(?:kid|kids|baby|child|children|school shoes|toys?)\b", case=False, regex=True).to_numpy()
             m &= ~juvenile
         
         return m
@@ -311,8 +322,7 @@ class SearchEngine:
             b += BOOST["color"] * (self.color_n == _alnum(intent["color"]))
         
         if intent.get("material"):
-            pm = _alnum(intent["material"])
-            b += BOOST["material"] * np.array([(pm in m) or (m in pm) for m in self.mat_n])
+            b += BOOST["material"] * np.array([is_material_match(intent["material"], m) for m in self.catalog["material"]])
         
         return b
     
@@ -325,8 +335,7 @@ class SearchEngine:
         if intent.get("brand"):
             flags["brand"] = self.brand_n == _alnum(intent["brand"])
         if intent.get("material"):
-            pm = _alnum(intent["material"])
-            flags["material"] = np.array([(pm in m) or (m in pm) for m in self.mat_n])
+            flags["material"] = np.array([is_material_match(intent["material"], m) for m in self.catalog["material"]])
         if intent.get("category"):
             pc = _cat(intent["category"])
             flags["category"] = np.array([pc == rc for rc in self.cat_norm])
