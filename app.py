@@ -359,7 +359,7 @@ if query.strip():
         
         t0 = time.time()
         with st.spinner("🔎 Searching..."):
-            fetch_k = max(25, top_k * 3)
+            fetch_k = max(8, top_k + 2)
             results, intent, relaxed, note = st.session_state.search_engine.search(query, k=fetch_k)
         st.session_state["last_latency"] = time.time() - t0
         st.session_state.last_results = (results, intent, relaxed, note)

@@ -343,12 +343,12 @@ class SearchEngine:
         need = [i for i in cand if (q_clean, i) not in CE_CACHE]
         
         if need:
-            # Use concise representation (first 220 chars) for fast transformer scoring
-            pairs = [(q_clean, str(self.catalog["text"].iloc[i])[:220]) for i in need]
+            # Use concise representation (first 150 chars) for lightning-fast cross-encoder scoring
+            pairs = [(q_clean, str(self.catalog["text"].iloc[i])[:150]) for i in need]
             with torch.inference_mode():
                 preds = ce.predict(
                     pairs,
-                    batch_size=32,
+                    batch_size=16,
                     show_progress_bar=False,
                     convert_to_numpy=True
                 )
