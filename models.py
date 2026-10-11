@@ -18,15 +18,21 @@ class ModelManager:
         if self._initialized:
             return
         
+        import os
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        if self.device == "cpu":
+            num_threads = min(4, os.cpu_count() or 4)
+            torch.set_num_threads(num_threads)
         
         # Skip loading LLM as it requires GPU and is unused
         
         with st.spinner("⏳ Loading embedder..."):
             self.embedder = SentenceTransformer(EMB_NAME, device=self.device)
+            self.embedder.eval()
         
         with st.spinner("⏳ Loading reranker..."):
             self.ce = CrossEncoder(CE_NAME, device=self.device)
+            self.ce.model.eval()
             if self.device == "cuda" and CE_FP16:
                 try:
                     self.ce.model.half()

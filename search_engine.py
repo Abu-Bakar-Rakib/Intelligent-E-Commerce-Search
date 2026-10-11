@@ -1,3 +1,4 @@
+import os
 import re
 import json
 import numpy as np
@@ -5,7 +6,7 @@ import pandas as pd
 import torch
 from transformers import StoppingCriteria, StoppingCriteriaList
 from config import (
-    F_ALPHA, F_BS, G_POOL, G_W, GROUP_TIER, COS_MIN, CE_MIN,
+    F_ALPHA, F_BS, G_POOL, G_W, GROUP_TIER, COS_MIN, CE_MIN, CE_RERANK_MAX,
     BOOST, MIN_RESULTS, RELAX_ORDER, ALLOW_FALLBACK, ATTR_W, PARSER_MODE
 )
 from utils import (
@@ -14,10 +15,11 @@ from utils import (
     parse_json, _alias_pass, build_bm25_index, bm25_scores, GENDER_CUES
 )
 
-# Cache for parsed intents and prepared data
+# Cache for parsed intents, prepared data, cross-encoder scores, and searches
 INTENT_CACHE = {}
 PREP_CACHE = {}
 CE_CACHE = {}
+SEARCH_CACHE = {}
 
 class SearchEngine:
     def __init__(self, catalog, models):
@@ -30,6 +32,18 @@ class SearchEngine:
         self._build_embeddings()
         self._build_bm25_index()
         self._build_groups()
+        self._warmup()
+    
+    def _warmup(self):
+        """Warm up PyTorch JIT kernels so even the first query is sub-second"""
+        try:
+            embedder = self.models.get_embedder()
+            ce = self.models.get_reranker()
+            with torch.inference_mode():
+                embedder.encode(["warmup"], show_progress_bar=False)
+                ce.predict([("warmup", "warmup")], show_progress_bar=False)
+        except Exception:
+            pass
     
     def _build_catalog_metadata(self):
         """Prepare catalog arrays for fast filtering"""
@@ -44,13 +58,31 @@ class SearchEngine:
         self.mat_n = [_alnum(m) for m in self.catalog["material"]]
     
     def _build_embeddings(self):
-        """Generate embeddings for all products"""
-        embedder = self.models.get_embedder()
+        """Generate or load cached embeddings for all products"""
+        emb_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "catalog_embeddings.npy")
         texts = self.catalog["text"].tolist()
-        self.embeddings = embedder.encode(
-            texts, batch_size=64, normalize_embeddings=True,
-            convert_to_numpy=True, show_progress_bar=False
-        ).astype("float32")
+        
+        # Fast disk cache check
+        if os.path.exists(emb_file):
+            try:
+                cached = np.load(emb_file)
+                if cached.shape[0] == len(texts):
+                    self.embeddings = cached.astype("float32")
+                    return
+            except Exception:
+                pass
+        
+        embedder = self.models.get_embedder()
+        with torch.inference_mode():
+            self.embeddings = embedder.encode(
+                texts, batch_size=64, normalize_embeddings=True,
+                convert_to_numpy=True, show_progress_bar=False
+            ).astype("float32")
+        
+        try:
+            np.save(emb_file, self.embeddings)
+        except Exception:
+            pass
     
     def _build_bm25_index(self):
         """Build BM25 index"""
@@ -173,8 +205,9 @@ class SearchEngine:
         embedder = self.models.get_embedder()
         
         # --- Semantic (cosine) scores ---
-        qv = embedder.encode([q_clean], normalize_embeddings=True, convert_to_numpy=True,
-                            show_progress_bar=False).astype("float32")[0]
+        with torch.inference_mode():
+            qv = embedder.encode([q_clean], normalize_embeddings=True, convert_to_numpy=True,
+                                show_progress_bar=False).astype("float32")[0]
         cos = self.embeddings @ qv
         
         # --- Lexical (BM25) scores ---
@@ -281,37 +314,47 @@ class SearchEngine:
         return bonus, flags
     
     def _compute_ce_scores(self, q_clean, cand):
-        """Compute cross-encoder scores with caching"""
+        """Compute cross-encoder scores with caching, batching, and inference mode"""
         ce = self.models.get_reranker()
         need = [i for i in cand if (q_clean, i) not in CE_CACHE]
         
         if need:
-            preds = ce.predict(
-                [(q_clean, self.catalog["text"].iloc[i]) for i in need],
-                show_progress_bar=False
-            )
+            # Use concise representation (first 220 chars) for fast transformer scoring
+            pairs = [(q_clean, str(self.catalog["text"].iloc[i])[:220]) for i in need]
+            with torch.inference_mode():
+                preds = ce.predict(
+                    pairs,
+                    batch_size=32,
+                    show_progress_bar=False,
+                    convert_to_numpy=True
+                )
             for i, s in zip(need, preds):
                 CE_CACHE[(q_clean, i)] = float(s)
         
         return np.array([CE_CACHE[(q_clean, i)] for i in cand])
     
     def search(self, query, k=5):
-        """Main search function"""
+        """Main search function with high-speed hybrid retrieval and capped reranking"""
+        # Fast query-result cache
+        cache_key = f"{query.strip().lower()}_{k}"
+        if cache_key in SEARCH_CACHE:
+            return SEARCH_CACHE[cache_key]
+        
         # Normalize query (Bangla support)
-        query = _alias_pass(query)
-        if not query.strip():
-            query = "product"
+        query_norm = _alias_pass(query)
+        if not query_norm.strip():
+            query_norm = "product"
         
         # Detect product groups
-        grp_mask, grp_names = self.detect_groups(query)
+        grp_mask, grp_names = self.detect_groups(query_norm)
         
         # Parse intent
-        intent = self.parse_query(query)
+        intent = self.parse_query(query_norm)
         
         # Prepare retrieval
-        prep = self.prepare_retrieval(query, intent)
+        prep = self.prepare_retrieval(query_norm, intent)
         
-        # --- RRF-based candidate selection (replaces simple linear blend) ---
+        # --- RRF-based candidate selection ---
         # Apply attribute boost on top of RRF
         rrf_boosted = prep["rrf"] + F_BS * prep["boost"]
         
@@ -323,16 +366,30 @@ class SearchEngine:
         
         # Combined selection score
         sel = rrf_boosted + grp_bonus + bonus
-        cand = [i for i in np.argsort(-sel)[:max(G_POOL * 3, k * 3)]]
+        
+        # Select candidates: pool size scales with k
+        pool_size = max(G_POOL, k)
+        cand = [int(i) for i in np.argsort(-sel)[:pool_size]]
         
         if not cand:
-            cand = [int(i) for i in np.argsort(-prep["raw_cos"])[:max(G_POOL, k)]]
+            cand = [int(i) for i in np.argsort(-prep["raw_cos"])[:pool_size]]
         
-        # Keep also the base (for fallback display)
+        # Keep also the base hybrid score
         base = F_ALPHA * prep["cos"] + (1 - F_ALPHA) * prep["bm"] + F_BS * prep["boost"]
         
-        # Rerank with cross-encoder
-        ce_raw = self._compute_ce_scores(prep["q_clean"], cand) if len(cand) > 1 else np.zeros(len(cand))
+        # Fast Neural Reranking: Only rerank top candidates (up to CE_RERANK_MAX)
+        rerank_n = min(len(cand), CE_RERANK_MAX)
+        rerank_cand = cand[:rerank_n]
+        remaining_cand = cand[rerank_n:]
+        
+        if rerank_n > 1:
+            ce_top = self._compute_ce_scores(prep["q_clean"], rerank_cand)
+            min_ce = float(ce_top.min()) if len(ce_top) > 0 else CE_MIN
+            # Remaining candidates outside top rerank pool receive baseline CE score
+            ce_rem = np.full(len(remaining_cand), min_ce - 2.0)
+            ce_raw = np.concatenate([ce_top, ce_rem])
+        else:
+            ce_raw = np.zeros(len(cand))
         
         # Determine confidence
         confident = (grp_mask is not None) or bool(flags) or \
@@ -372,4 +429,6 @@ class SearchEngine:
         if grp_names:
             note += f"Category: {', '.join(grp_names)}"
         
-        return df.reset_index(drop=True), intent, prep["relaxed"], note.rstrip(" | ")
+        res = (df.reset_index(drop=True), intent, prep["relaxed"], note.rstrip(" | "))
+        SEARCH_CACHE[cache_key] = res
+        return res

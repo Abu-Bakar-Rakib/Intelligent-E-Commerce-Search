@@ -9,6 +9,7 @@ CE_NAME = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
 F_ALPHA = 0.6           # weight of semantic score
 F_BS = 1.0              # scale of attribute boosts
 G_POOL = 10             # candidates sent to cross-encoder
+CE_RERANK_MAX = 12      # maximum candidate pairs sent to cross-encoder for fast sub-second latency
 G_W = 0.5               # cross-encoder weight in final score
 GROUP_TIER = 1.0        # bonus for same-product-group items
 COS_MIN = 0.30          # confidence gate: min raw cosine

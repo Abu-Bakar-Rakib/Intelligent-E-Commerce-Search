@@ -260,8 +260,12 @@ SPELL_VOCAB = [
     "under", "below", "above", "upto", "between",
 ]
 
+from functools import lru_cache
+SPELL_VOCAB_SET = set(SPELL_VOCAB)
+
+@lru_cache(maxsize=2048)
 def fuzzy_correct(query: str) -> str:
-    """Correct misspelled English words in query using fuzzy matching."""
+    """Correct misspelled English words in query using fast fuzzy matching."""
     words = query.split()
     corrected = []
     for word in words:
@@ -270,8 +274,8 @@ def fuzzy_correct(query: str) -> str:
         if len(w_lower) <= 2 or not w_lower.isascii() or w_lower.isdigit():
             corrected.append(word)
             continue
-        # If the word is already in vocab, keep it as-is
-        if w_lower in SPELL_VOCAB or w_lower in ALIASES:
+        # If the word is already in vocab, keep it as-is (O(1) set lookup)
+        if w_lower in SPELL_VOCAB_SET or w_lower in ALIASES:
             corrected.append(word)
             continue
         # Try to find a close match (cutoff=0.75 = 75% similarity required)
@@ -282,6 +286,7 @@ def fuzzy_correct(query: str) -> str:
             corrected.append(word)
     return " ".join(corrected)
 
+@lru_cache(maxsize=2048)
 def _alias_pass(query):
     # Step 1: Fuzzy-correct the raw query before any other processing
     query = fuzzy_correct(query)

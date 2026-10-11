@@ -243,21 +243,34 @@ with col_mic:
 query = voice_query if voice_query else text_query
 
 # ===== EXECUTE SEARCH =====
+import time
+
 if query.strip():
     current_search_key = f"{query.strip()}_{top_k}"
     if current_search_key != st.session_state.get("last_search_key") or st.session_state.last_results is None:
         st.session_state.search_count += 1
         st.session_state["last_search_key"] = current_search_key
         
+        t0 = time.time()
         with st.spinner("🔎 Searching..."):
-            # Fetch a large pool (e.g. 50) to ensure we have enough items to filter
-            results, intent, relaxed, note = st.session_state.search_engine.search(query, k=50)
-        
+            fetch_k = max(25, top_k * 3)
+            results, intent, relaxed, note = st.session_state.search_engine.search(query, k=fetch_k)
+        st.session_state["last_latency"] = time.time() - t0
         st.session_state.last_results = (results, intent, relaxed, note)
 
 # ===== DISPLAY RESULTS =====
 if st.session_state.last_results:
     results, intent, relaxed, note = st.session_state.last_results
+    
+    # Display speed latency indicator
+    if "last_latency" in st.session_state:
+        st.markdown(
+            f"<div style='margin-bottom: 12px; font-size: 0.88rem; color: #64748b; font-weight: 500;'>"
+            f"⚡ Search completed in <span style='color: #10b981; font-weight: 700;'>{st.session_state['last_latency']:.2f}s</span> "
+            f"· <span style='color: #6366f1;'>Hybrid RRF + Accelerated Neural Reranker</span>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
     
     # Apply Sidebar Filters
     if len(results) > 0:
