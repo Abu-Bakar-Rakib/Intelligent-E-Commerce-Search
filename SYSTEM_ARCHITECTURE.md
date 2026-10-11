@@ -1,5 +1,34 @@
 # 🏗️ System Architecture - Detailed Breakdown
 
+<div align="center">
+  <table>
+    <tr>
+      <td><strong>🎯 Input</strong><br/>Text + Voice + Banglish</td>
+      <td><strong>🔄 Processing</strong><br/>Normalize + Intent + Retrieval</td>
+      <td><strong>⚡ Ranking</strong><br/>BM25 + Semantic + RRF + Cross-Encoder</td>
+      <td><strong>✨ Output</strong><br/>Filtered results + UI cards</td>
+    </tr>
+  </table>
+</div>
+
+> [!IMPORTANT]
+> This architecture transforms a raw customer query into a ranked, filtered, and visually rendered product list without relying on external APIs.
+
+## 🧭 Quick Navigation
+- [Complete System Flow Diagram](#-complete-system-flow-diagram)
+- [Module Hierarchy & Responsibilities](#-module-hierarchy--responsibilities)
+- [Data Flow - Detailed Query Processing](#-data-flow---detailed-query-processing)
+- [AI Models & Their Roles](#-ai-models--their-roles)
+- [Performance Optimizations](#-performance-optimizations)
+- [File Dependency Graph](#-file-dependency-graph)
+- [Query Examples & Processing Paths](#-query-examples--processing-paths)
+- [Data Security & Privacy](#-data-security--privacy)
+- [System Scaling Considerations](#-system-scaling-considerations)
+- [Deployment Architecture](#-deployment-architecture)
+- [Component Summary Table](#-component-summary-table)
+
+---
+
 ## 📊 Complete System Flow Diagram
 
 ```mermaid
@@ -73,6 +102,9 @@ graph TB
     style filter fill:#e0e7ff,stroke:#6366f1,stroke-width:2px
     style output fill:#d1fae5,stroke:#10b981,stroke-width:2px
 ```
+
+> [!TIP]
+> The system uses a hybrid design: lexical retrieval (BM25) handles exact text matches, while semantic retrieval captures intent and meaning for typo, Bangla, and Banglish requests.
 
 ---
 
@@ -385,7 +417,7 @@ Input: "kacha morich" (fresh green chilli)
 │  │  │  + Data Catalog              ││
 │  │  └──────────────────────────────┘│
 │  └─────────────────────────────────┘│
-└────────────────────────────────���────┘
+└─────────────────────────────────────┘
          ▲
          │ HTTP
          │
