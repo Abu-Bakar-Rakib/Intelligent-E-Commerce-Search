@@ -13,8 +13,13 @@ from utils import (
     _toks, _key, _alnum, _word_in, _cat, _minmax, extract_price,
     strip_price_phrase, strip_size_phrase, _find_size, _find_gender,
     parse_json, _alias_pass, build_bm25_index, bm25_scores, GENDER_CUES,
-    strip_conversational_phrases
+    strip_conversational_phrases, is_father_gift_query
 )
+
+MATURE_MEN_CATEGORIES = {
+    "wallet", "watch", "formal shoes", "shirt", "grooming", "fragrance",
+    "panjabi", "sunglasses", "backpack", "sandals"
+}
 
 # Cache for parsed intents, prepared data, cross-encoder scores, and searches
 INTENT_CACHE = {}
@@ -188,14 +193,22 @@ class SearchEngine:
         intent["min_price"] = min_p
         intent["max_price"] = max_p
         
+        # Recipient/Father gift detection
+        intent["is_father_gift"] = is_father_gift_query(query)
+        if intent["is_father_gift"] and not intent["gender"]:
+            intent["gender"] = "men"
+        
         INTENT_CACHE[key] = intent
         return intent
     
-    def retrieval_query(self, q):
+    def retrieval_query(self, q, intent=None):
         """Clean query for retrieval: no price, no size, no conversational fillers"""
         a = strip_price_phrase(q) or q
         a = strip_size_phrase(a) or a
-        return strip_conversational_phrases(a) or a
+        cleaned = strip_conversational_phrases(a) or a
+        if intent and intent.get("is_father_gift") and not intent.get("category"):
+            return "gift for father mature men wallet watch formal shirt electric shaver attar leather shoes"
+        return cleaned
     
     def prepare_retrieval(self, query, intent):
         """Prepare BM25 & cosine scores with RRF-based hybrid fusion"""
@@ -203,7 +216,7 @@ class SearchEngine:
         if key in PREP_CACHE:
             return PREP_CACHE[key]
         
-        q_clean = self.retrieval_query(query)
+        q_clean = self.retrieval_query(query, intent)
         embedder = self.models.get_embedder()
         
         # --- Semantic (cosine) scores ---
@@ -267,11 +280,20 @@ class SearchEngine:
             if intent.get("min_price") is not None:
                 m &= self.price >= intent["min_price"]
         
+        # When looking for gifts for father/mature adult men, strictly exclude juvenile/kids items
+        if intent.get("is_father_gift"):
+            juvenile = self.catalog["text"].str.contains(r"\b(kid|kids|baby|child|children|school shoes|toys?)\b", case=False, regex=True).to_numpy()
+            m &= ~juvenile
+        
         return m
     
     def _make_boost(self, intent):
         """Create attribute boost vector"""
         b = np.zeros(self.n_docs)
+        
+        if intent.get("is_father_gift"):
+            is_mature = self.catalog["category"].isin(MATURE_MEN_CATEGORIES).to_numpy()
+            b += BOOST["category"] * 1.5 * is_mature
         
         if intent.get("category"):
             pc = _cat(intent["category"])
@@ -431,6 +453,8 @@ class SearchEngine:
         df["matched"] = ["+".join(n for n, f in flags.items() if f[i]) for i in top]
         
         note = ""
+        if intent.get("is_father_gift"):
+            note += "Recipient: Father (Mature Men's Collection) | "
         if intent.get("max_price") is not None and intent.get("min_price") is not None:
             note += f"Price: ৳{intent['min_price']} - ৳{intent['max_price']} | "
         elif intent.get("max_price") is not None:

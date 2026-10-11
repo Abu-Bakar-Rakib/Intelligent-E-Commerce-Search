@@ -140,20 +140,38 @@ def parse_json(text):
         data = {}
     return data
 
-# ===== GENDER DETECTION =====
+# ===== GENDER & RECIPIENT DETECTION =====
 GENDER_CUES = {
-    "men": ["men", "mens", "men's", "man", "male", "gents", "chele", "cheleder", "chheleder", "purush"],
-    "women": ["women", "womens", "women's", "woman", "female", "ladies", "lady", "meye", "meyeder", "mohila"],
-    "boys": ["boy", "boys", "balok", "baccha chele"],
-    "girls": ["girl", "girls", "balika", "baccha meye"],
+    "men": [
+        "men", "mens", "men's", "man", "male", "gents", "chele", "cheleder", "chheleder", "purush",
+        "father", "fathers", "father's", "dad", "daddy", "baba", "babar", "abba", "abbar",
+        "husband", "bor", "brother", "bhai", "bhaiya", "grandfather", "dada", "nana"
+    ],
+    "women": [
+        "women", "womens", "women's", "woman", "female", "ladies", "lady", "meye", "meyeder", "mohila",
+        "mother", "mothers", "mother's", "mom", "mommy", "ma", "maa", "mayer", "amma", "ammar",
+        "wife", "bou", "sister", "bon", "apu", "grandmother", "dadi", "nani"
+    ],
+    "boys": ["boy", "boys", "balok", "baccha chele", "chotto chele", "kid boy", "son", "cheler"],
+    "girls": ["girl", "girls", "balika", "baccha meye", "chotto meye", "kid girl", "daughter", "meyetir"],
     "unisex": ["unisex", "sobar", "shobar"]
 }
+
+FATHER_CUES = ["father", "fathers", "father's", "dad", "daddy", "baba", "babar", "abba", "abbar", "grandfather", "dada", "nana"]
+MOTHER_CUES = ["mother", "mothers", "mother's", "mom", "mommy", "ma", "maa", "mayer", "amma", "ammar", "grandmother", "dadi", "nani"]
+GIFT_CUES = ["gift", "gifts", "present", "presents", "upohar", "item for"]
 
 def _find_gender(q):
     for g in ("women", "men", "girls", "boys", "unisex"):
         if any(_word_in(c, q) for c in GENDER_CUES[g]):
             return g
     return None
+
+def is_father_gift_query(q):
+    q_lower = q.lower()
+    has_father = any(_word_in(c, q_lower) for c in FATHER_CUES)
+    has_gift = any(_word_in(g, q_lower) for g in GIFT_CUES) or "for" in q_lower or "jonno" in q_lower
+    return has_father and has_gift
 
 # ===== BANGLA/BANGLISH NORMALIZATION =====
 ALIASES = {
@@ -308,10 +326,25 @@ SPELL_VOCAB = [
     "summer", "winter", "latest", "new", "classic", "modern",
     "small", "medium", "large", "extra", "mini", "portable",
     "under", "below", "above", "upto", "between",
+
+    # ── Gifts & Persona words ──
+    "gift", "gifts", "present", "presents", "item", "items",
+    "father", "mother", "dad", "mom", "brother", "sister",
+    "husband", "wife", "son", "daughter", "mature", "adult",
+    "baba", "babar", "abba", "abbar", "dada", "nana",
 ]
 
+COMMON_WORDS = {
+    "for", "the", "and", "with", "from", "into", "onto", "over", "your", "mine", "them", "this", "that", "these", "those",
+    "give", "show", "find", "need", "want", "have", "some", "good", "best", "like",
+    "baba", "babar", "abba", "abbar", "mama", "kaka", "chacha", "fupu", "khala", "nana", "dada", "dadi", "nani",
+    "bhai", "bhaiya", "bon", "apu", "bou", "bor", "shami", "meye", "chele", "baccha",
+    "jonno", "moddhe", "niche", "beshi", "kom", "er", "te", "amake", "dekhao", "dao", "koto", "dam",
+    "taka", "takar"
+}
+
 from functools import lru_cache
-SPELL_VOCAB_SET = set(SPELL_VOCAB)
+SPELL_VOCAB_SET = set(SPELL_VOCAB) | COMMON_WORDS
 
 @lru_cache(maxsize=2048)
 def fuzzy_correct(query: str) -> str:
@@ -324,8 +357,8 @@ def fuzzy_correct(query: str) -> str:
         if len(w_lower) <= 2 or not w_lower.isascii() or w_lower.isdigit():
             corrected.append(word)
             continue
-        # If the word is already in vocab, keep it as-is (O(1) set lookup)
-        if w_lower in SPELL_VOCAB_SET or w_lower in ALIASES:
+        # If the word is already in vocab, common words, or aliases, keep it as-is (O(1) set lookup)
+        if w_lower in SPELL_VOCAB_SET or w_lower in ALIASES or w_lower in COMMON_WORDS:
             corrected.append(word)
             continue
         # Try to find a close match (cutoff=0.75 = 75% similarity required)
