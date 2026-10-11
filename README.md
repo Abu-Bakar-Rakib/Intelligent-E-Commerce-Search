@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=28&pause=1000&color=6366F1&center=true&vCenter=true&width=700&lines=🛍️+Intelligent+E-Commerce+Search;Bangla+%7C+English+%7C+Banglish+AI+Search;RRF+Hybrid+%7C+Voice+%7C+Typo-Tolerant" alt="Typing SVG" />
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=28&pause=1000&color=6366F1&center=true&vCenter=true&width=700&lines=🛍️+Intelligent+E-Commerce+Search;Bangla+%7C+English+%7C+Banglish;AI-Powered+Product+Discovery" />
 
 <br/>
 
@@ -93,30 +93,30 @@ graph TD
 
 ```
 User Query ──► Fuzzy Spell Correction ──► Banglish Normalization ──► Intent Extraction
-                                                                              │
-                                                        ┌─────────────────────┴──────────────────────┐
-                                                        ▼                                             ▼
-                                             BM25 Keyword Search                    Semantic Vector Search
-                                             (Exact + Lexical Hits)           (paraphrase-multilingual-MiniLM)
-                                                        └─────────────────────┬──────────────────────┘
-                                                                              ▼
-                                                          ⚡ Reciprocal Rank Fusion (RRF)
-                                                        (merges BM25 rank + cosine rank)
-                                                                              │
-                                                                              ▼
-                                                            Cross-Encoder Deep Re-ranking
-                                                           (mmarco-mMiniLMv2-L12-H384)
-                                                                              │
-                                                          ┌───────────────────┴───────────────────┐
-                                                          ▼                                       ▼
-                                                    🎯 Top Matches                     💡 Related Products
-                                                    (score ≥ 50)                        (score < 50)
-                                                          └───────────────────┬───────────────────┘
-                                                                              ▼
-                                                              Category & Price Sidebar Filters
-                                                                              │
-                                                                              ▼
-                                                                  ✨ Product Cards UI
+                                                                             │
+                                                     ┌─────────────────────┴──────────────────────┐
+                                                     ▼                                             ▼
+                                          BM25 Keyword Search                    Semantic Vector Search
+                                          (Exact + Lexical Hits)           (paraphrase-multilingual-MiniLM)
+                                                     └─────────────────────┬──────────────────────┘
+                                                                           ▼
+                                                       ⚡ Reciprocal Rank Fusion (RRF)
+                                                     (merges BM25 rank + cosine rank)
+                                                                           │
+                                                                           ▼
+                                                         Cross-Encoder Deep Re-ranking
+                                                        (mmarco-mMiniLMv2-L12-H384)
+                                                                           │
+                                                       ┌───────────────────┴───────────────────┐
+                                                       ▼                                       ▼
+                                                 🎯 Top Matches                     💡 Related Products
+                                                 (score ≥ 50)                        (score < 50)
+                                                       └───────────────────┬───────────────────┘
+                                                                           ▼
+                                                           Category & Price Sidebar Filters
+                                                                           │
+                                                                           ▼
+                                                               ✨ Product Cards UI
 ```
 
 ---
@@ -205,10 +205,10 @@ Instead of a fragile `score = 0.6×cosine + 0.4×BM25` linear blend, this engine
 ```
 rrf(product) = 1/(60 + cosine_rank) + 1/(60 + bm25_rank)
 ```
-This is **immune to score scale differences** — BM25 scores (0–50) and cosine scores (0–1) no longer interfere with each other. Proven in academic research to consistently outperform linear blending.
+This is **immune to score scale differences** — BM25 scores (0–50) and cosine scores (0–1) no longer interfere with each other. Proven in academic research to consistently outperform linear combinations.
 
 ### Fuzzy Spell Correction
-Built with Python's `difflib.get_close_matches` against a **300+ word vocabulary** covering every product type, brand, color, material, and category. Bangla text is safely skipped — only English typos are corrected.
+Built with Python's `difflib.get_close_matches` against a **300+ word vocabulary** covering every product type, brand, color, material, and category. Bangla text is safely skipped — only English text is corrected.
 
 ---
 
